@@ -13,31 +13,39 @@ type Task struct {
 	Completed   bool   `json:"completed"`
 }
 
+type requestBody struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
 var tasks = make(map[int]Task)
 var taskID int = 1
 var mutex = &sync.RWMutex{}
 
 func createTask(w http.ResponseWriter, r *http.Request) {
-	var task Task
+	var requestBody requestBody
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
-	err := decoder.Decode(&task)
+	err := decoder.Decode(&requestBody)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	task.Completed = false
-
-	if task.Title == "" {
+	if requestBody.Title == "" {
 		http.Error(w, "Title is required", http.StatusBadRequest)
 		return
 	}
 
 	mutex.Lock()
-	task.ID = taskID
+	task := Task{
+		ID:          taskID,
+		Title:       requestBody.Title,
+		Description: requestBody.Description,
+		Completed:   false,
+	}
 	taskID++
 	tasks[task.ID] = task
 	mutex.Unlock()
