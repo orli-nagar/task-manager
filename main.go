@@ -22,7 +22,7 @@ var tasks = make(map[int]Task)
 var taskID int = 1
 var mutex = &sync.RWMutex{}
 
-func newTask(id int, title string, description string) Task {
+func NewTask(id int, title string, description string) Task {
 	return Task{
 		ID:          id,
 		Title:       title,
@@ -49,7 +49,7 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mutex.Lock()
-	task := newTask(taskID, req.Title, req.Description)
+	task := NewTask(taskID, req.Title, req.Description)
 	tasks[task.ID] = task
 	taskID++
 	mutex.Unlock()
