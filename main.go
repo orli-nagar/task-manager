@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -16,6 +17,12 @@ type Task struct {
 type createTaskRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
+}
+
+type updateTaskRequest struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Completed   *bool   `json:"completed"`
 }
 
 var tasks = make(map[int]Task)
@@ -65,6 +72,78 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	w.Write(response)
 }
 
+func updateTask(w http.ResponseWriter, r *http.Request) {
+	var req updateTaskRequest
+	idString := r.PathValue("id")
+	id, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	err = decoder.Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	mutex.Lock()
+	task, ok := tasks[id]
+	if !ok {
+		mutex.Unlock()
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	if req.Title != nil {
+		task.Title = *req.Title
+	}
+	if req.Description != nil {
+		task.Description = *req.Description
+	}
+	if req.Completed != nil {
+		task.Completed = *req.Completed
+	}
+
+	tasks[id] = task
+	mutex.Unlock()
+
+	response, err := json.Marshal(task)
+	if err != nil {
+		http.Error(w, "Failed to marshal task", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(response)
+}
+
+func deleteTask(w http.ResponseWriter, r *http.Request) {
+	idString := r.PathValue("id")
+	id, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	mutex.Lock()
+	_, ok := tasks[id]
+	if !ok {
+		mutex.Unlock()
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+	delete(tasks, id)
+	mutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+
+}
+
 func getTasks(w http.ResponseWriter, r *http.Request) {
 
 	mutex.RLock()
@@ -88,5 +167,7 @@ func getTasks(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("POST /tasks", createTask)
 	http.HandleFunc("GET /tasks", getTasks)
+	http.HandleFunc("PATCH /tasks/{id}", updateTask)
+	http.HandleFunc("DELETE /tasks/{id}", deleteTask)
 	http.ListenAndServe(":8080", nil)
 }
