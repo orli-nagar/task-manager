@@ -1,18 +1,18 @@
 # Task Management Service
 
-A simple HTTP service written in Go for creating and retrieving tasks.
+A simple HTTP service written in Go for managing tasks.
 
 Tasks are stored in memory and are not persisted after the server is stopped.
 
 ## Running the Service
 
-Run the application with:
+Run the application locally:
 
 ```bash
 go run .
 ```
 
-The server will start on port `8080`.
+The server runs on port `8080`.
 
 ## API Endpoints
 
@@ -20,28 +20,16 @@ The server will start on port `8080`.
 
 **POST** `/tasks`
 
-Example request body:
+Example request:
 
 ```json
 {
   "title": "Learn Go",
-  "description": "Practice building an HTTP service",
-  "completed": false
+  "description": "Practice building an HTTP service"
 }
 ```
 
-The server assigns an ID to each new task.
-
-Example response:
-
-```json
-{
-  "ID": 1,
-  "Title": "Learn Go",
-  "Description": "Practice building an HTTP service",
-  "Completed": false
-}
-```
+New tasks are created with `completed` set to `false`.
 
 ### Get All Tasks
 
@@ -49,19 +37,45 @@ Example response:
 
 Returns all tasks currently stored in memory.
 
-Example response:
+### Update a Task
+
+**PATCH** `/tasks/{id}`
+
+Updates the provided fields of an existing task.
+
+Example request:
 
 ```json
-[
-  {
-    "ID": 1,
-    "Title": "Learn Go",
-    "Description": "Practice building an HTTP service",
-    "Completed": false
-  }
-]
+{
+  "title": "Learn Go concurrency",
+  "completed": true
+}
 ```
+
+### Delete a Task
+
+**DELETE** `/tasks/{id}`
+
+Deletes the task with the given ID.
+
+## Running with Docker
+
+Build the image:
+
+```bash
+docker build -t task-manager .
+```
+
+Run the container:
+
+```bash
+docker run -p 8080:8080 task-manager
+```
+
+The service will be available on port `8080`.
 
 ## Storage
 
-Tasks are stored in memory using a Go map. Restarting the service clears all existing tasks.
+Tasks are stored in memory using a Go map. Access to the shared task storage is protected for concurrent requests.
+
+Restarting the service clears all existing tasks.
