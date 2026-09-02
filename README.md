@@ -63,13 +63,13 @@ Deletes the task with the given ID.
 Build the image:
 
 ```bash
-docker build -t task-manager .
+podman build -t task-manager .
 ```
 
 Run the container:
 
 ```bash
-docker run -p 8080:8080 task-manager
+podman run -p 8080:8080 task-manager
 ```
 
 The service will be available on port `8080`.
