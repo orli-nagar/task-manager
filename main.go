@@ -48,11 +48,6 @@ func createTask(c *gin.Context) {
 		return
 	}
 
-	if req.Title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
-		return
-	}
-
 	mutex.Lock()
 	task := NewTask(taskID, req.Title, req.Description)
 	tasks[task.ID] = task
