@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Task struct {
@@ -15,8 +16,8 @@ type Task struct {
 }
 
 type createTaskRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description" binding:"required"`
 }
 
 type updateTaskRequest struct {
@@ -38,20 +39,17 @@ func NewTask(id int, title string, description string) Task {
 	}
 }
 
-func createTask(w http.ResponseWriter, r *http.Request) {
+func createTask(c *gin.Context) {
 	var req createTaskRequest
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	err := decoder.Decode(&req)
+	err := c.ShouldBindJSON(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if req.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
 		return
 	}
 
@@ -61,49 +59,40 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	taskID++
 	mutex.Unlock()
 
-	response, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, "Failed to marshal task", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(response)
+	c.JSON(http.StatusCreated, task)
 }
 
-func updateTask(w http.ResponseWriter, r *http.Request) {
+func updateTask(c *gin.Context) {
 	var req updateTaskRequest
-	idString := r.PathValue("id")
-	id, err := strconv.Atoi(idString)
+
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
 		return
 	}
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	err = decoder.Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
 	mutex.Lock()
+
 	task, ok := tasks[id]
 	if !ok {
 		mutex.Unlock()
-		http.Error(w, "Task not found", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
 
 	if req.Title != nil {
 		task.Title = *req.Title
 	}
+
 	if req.Description != nil {
 		task.Description = *req.Description
 	}
+
 	if req.Completed != nil {
 		task.Completed = *req.Completed
 	}
@@ -111,41 +100,30 @@ func updateTask(w http.ResponseWriter, r *http.Request) {
 	tasks[id] = task
 	mutex.Unlock()
 
-	response, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, "Failed to marshal task", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
+	c.JSON(http.StatusOK, task)
 }
 
-func deleteTask(w http.ResponseWriter, r *http.Request) {
-	idString := r.PathValue("id")
-	id, err := strconv.Atoi(idString)
+func deleteTask(c *gin.Context) {
+	id := c.Param("id")
+	idInt, err := strconv.Atoi(id)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
 		return
 	}
 	mutex.Lock()
-	_, ok := tasks[id]
+	_, ok := tasks[idInt]
 	if !ok {
 		mutex.Unlock()
-		http.Error(w, "Task not found", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
-	delete(tasks, id)
+	delete(tasks, idInt)
 	mutex.Unlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message":"Task deleted successfully"}`))
+	c.Status(http.StatusNoContent)
 
 }
 
-func getTasks(w http.ResponseWriter, r *http.Request) {
+func getTasks(c *gin.Context) {
 
 	mutex.RLock()
 	taskList := make([]Task, 0, len(tasks))
@@ -155,25 +133,15 @@ func getTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	mutex.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	response, err := json.Marshal(taskList)
-	if err != nil {
-		http.Error(w, "Failed to marshal tasks", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
-}
-
-func newRouter() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /tasks", createTask)
-	mux.HandleFunc("GET /tasks", getTasks)
-	mux.HandleFunc("PATCH /tasks/{id}", updateTask)
-	mux.HandleFunc("DELETE /tasks/{id}", deleteTask)
-	return mux
+	c.JSON(http.StatusOK, taskList)
 }
 
 func main() {
-	http.ListenAndServe(":8080", newRouter())
+	gin.EnableJsonDecoderDisallowUnknownFields()
+	r := gin.Default()
+	r.POST("/tasks", createTask)
+	r.GET("/tasks", getTasks)
+	r.PATCH("/tasks/:id", updateTask)
+	r.DELETE("/tasks/:id", deleteTask)
+	r.Run(":8080")
 }
