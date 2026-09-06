@@ -140,7 +140,8 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 	mutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"Task deleted successfully"}`))
 
 }
 
@@ -164,10 +165,15 @@ func getTasks(w http.ResponseWriter, r *http.Request) {
 	w.Write(response)
 }
 
+func newRouter() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /tasks", createTask)
+	mux.HandleFunc("GET /tasks", getTasks)
+	mux.HandleFunc("PATCH /tasks/{id}", updateTask)
+	mux.HandleFunc("DELETE /tasks/{id}", deleteTask)
+	return mux
+}
+
 func main() {
-	http.HandleFunc("POST /tasks", createTask)
-	http.HandleFunc("GET /tasks", getTasks)
-	http.HandleFunc("PATCH /tasks/{id}", updateTask)
-	http.HandleFunc("DELETE /tasks/{id}", deleteTask)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", newRouter())
 }
