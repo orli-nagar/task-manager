@@ -1,18 +1,19 @@
 package main
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
-	"sync"
+	"task-manager/database"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Task struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Completed   bool   `json:"completed"`
+	ID          int    `json:"id" db:"id"`
+	Title       string `json:"title" db:"title"`
+	Description string `json:"description" db:"description"`
+	Completed   bool   `json:"completed" db:"completed"`
 }
 
 type createTaskRequest struct {
@@ -26,10 +27,6 @@ type updateTaskRequest struct {
 	Completed   *bool   `json:"completed"`
 }
 
-var tasks = make(map[int]Task)
-var taskID int = 1
-var mutex = &sync.RWMutex{}
-
 func NewTask(id int, title string, description string) Task {
 	return Task{
 		ID:          id,
@@ -39,26 +36,42 @@ func NewTask(id int, title string, description string) Task {
 	}
 }
 
-func createTask(c *gin.Context) {
+func insertTask(c *gin.Context) {
 	var req createTaskRequest
-
-	err := c.ShouldBindJSON(&req)
-	if err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	mutex.Lock()
-	task := NewTask(taskID, req.Title, req.Description)
-	tasks[task.ID] = task
-	taskID++
-	mutex.Unlock()
-
+	task := NewTask(0, req.Title, req.Description)
+	err := database.Db.QueryRow(
+		"INSERT INTO tasks (title, description, completed) VALUES ($1, $2, $3) RETURNING id",
+		task.Title, task.Description, task.Completed,
+	).Scan(&task.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, task)
+}
+
+func getTasks(c *gin.Context) {
+
+	var taskList []Task
+	err := database.Db.Select(&taskList, "SELECT id, title, description, completed FROM tasks")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, taskList)
 }
 
 func updateTask(c *gin.Context) {
 	var req updateTaskRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -66,17 +79,20 @@ func updateTask(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+	var task Task
+
+	err = database.Db.Get(
+		&task,
+		"SELECT id, title, description, completed FROM tasks WHERE id = $1",
+		id,
+	)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
 
-	mutex.Lock()
-
-	task, ok := tasks[id]
-	if !ok {
-		mutex.Unlock()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -92,10 +108,22 @@ func updateTask(c *gin.Context) {
 		task.Completed = *req.Completed
 	}
 
-	tasks[id] = task
-	mutex.Unlock()
+	_, err = database.Db.Exec(
+		`UPDATE tasks
+		 SET title = $1, description = $2, completed = $3
+		 WHERE id = $4`,
+		task.Title,
+		task.Description,
+		task.Completed,
+		task.ID,
+	)
 
-	c.JSON(http.StatusOK, task)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func deleteTask(c *gin.Context) {
@@ -105,36 +133,29 @@ func deleteTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
 		return
 	}
-	mutex.Lock()
-	_, ok := tasks[idInt]
-	if !ok {
-		mutex.Unlock()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+	result, err := database.Db.Exec("DELETE FROM tasks WHERE id = $1", idInt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	delete(tasks, idInt)
-	mutex.Unlock()
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if rowsAffected == 0 {
+		c.Status(http.StatusNotFound)
+		return
+	}
 	c.Status(http.StatusNoContent)
 
 }
 
-func getTasks(c *gin.Context) {
-
-	mutex.RLock()
-	taskList := make([]Task, 0, len(tasks))
-
-	for _, task := range tasks {
-		taskList = append(taskList, task)
-	}
-	mutex.RUnlock()
-
-	c.JSON(http.StatusOK, taskList)
-}
-
 func main() {
+	database.ConnectDatabase()
 	gin.EnableJsonDecoderDisallowUnknownFields()
 	r := gin.Default()
-	r.POST("/tasks", createTask)
+	r.POST("/tasks", insertTask)
 	r.GET("/tasks", getTasks)
 	r.PATCH("/tasks/:id", updateTask)
 	r.DELETE("/tasks/:id", deleteTask)
