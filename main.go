@@ -4,7 +4,8 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
-	"task-manager/database"
+
+	"github.com/orli-nagar/task-manager/database"
 
 	"github.com/gin-gonic/gin"
 )
@@ -48,7 +49,7 @@ func insertTask(c *gin.Context) {
 		task.Title, task.Description, task.Completed,
 	).Scan(&task.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 	c.JSON(http.StatusCreated, task)
@@ -59,7 +60,7 @@ func getTasks(c *gin.Context) {
 	var taskList []Task
 	err := database.Db.Select(&taskList, "SELECT id, title, description, completed FROM tasks")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 	c.JSON(http.StatusOK, taskList)
@@ -92,7 +93,7 @@ func updateTask(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 
@@ -119,11 +120,10 @@ func updateTask(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
-
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, task)
 }
 
 func deleteTask(c *gin.Context) {
@@ -135,12 +135,12 @@ func deleteTask(c *gin.Context) {
 	}
 	result, err := database.Db.Exec("DELETE FROM tasks WHERE id = $1", idInt)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Status(http.StatusInternalServerError)
 		return
 	}
 	if rowsAffected == 0 {
@@ -151,8 +151,24 @@ func deleteTask(c *gin.Context) {
 
 }
 
+func CreateTasksTable() {
+	query := `
+		CREATE TABLE IF NOT EXISTS tasks (
+			id SERIAL PRIMARY KEY,
+			title TEXT NOT NULL,
+			description TEXT,
+			completed BOOLEAN NOT NULL DEFAULT FALSE
+		);
+	`
+
+	if _, err := database.Db.Exec(query); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	database.ConnectDatabase()
+	CreateTasksTable()
 	gin.EnableJsonDecoderDisallowUnknownFields()
 	r := gin.Default()
 	r.POST("/tasks", insertTask)
