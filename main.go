@@ -151,24 +151,9 @@ func deleteTask(c *gin.Context) {
 
 }
 
-func CreateTasksTable() {
-	query := `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id SERIAL PRIMARY KEY,
-			title TEXT NOT NULL,
-			description TEXT,
-			completed BOOLEAN NOT NULL DEFAULT FALSE
-		);
-	`
-
-	if _, err := database.Db.Exec(query); err != nil {
-		panic(err)
-	}
-}
-
 func main() {
 	database.ConnectDatabase()
-	CreateTasksTable()
+	database.CreateTasksTable()
 	gin.EnableJsonDecoderDisallowUnknownFields()
 	r := gin.Default()
 	r.POST("/tasks", insertTask)

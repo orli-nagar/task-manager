@@ -11,6 +11,10 @@ import (
 
 var Db *sqlx.DB
 
+type Config struct {
+	DatabaseURL string
+}
+
 // ConnectDatabase loads .env, builds the connection string, and opens the DB.
 func ConnectDatabase() {
 	viper.SetConfigFile(".env")
@@ -19,9 +23,11 @@ func ConnectDatabase() {
 		fmt.Println("Warning: could not load .env file:", err)
 	}
 
-	dsn := viper.GetString("DATABASE_URL")
+	cfg := Config{
+		DatabaseURL: viper.GetString("DATABASE_URL"),
+	}
 
-	db, err := sqlx.Open("postgres", dsn)
+	db, err := sqlx.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		fmt.Println("Error connecting to the database:", err)
 		panic(err)
