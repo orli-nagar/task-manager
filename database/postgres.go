@@ -12,22 +12,27 @@ import (
 var Db *sqlx.DB
 
 type Config struct {
-	DatabaseURL string
+	DatabaseURL string `mapstructure:"DATABASE_URL"`
 }
 
-// ConnectDatabase loads .env, builds the connection string, and opens the DB.
-func ConnectDatabase() {
+func LoadConfig() {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err != nil {
 		fmt.Println("Warning: could not load .env file:", err)
 	}
+}
 
-	cfg := Config{
-		DatabaseURL: viper.GetString("DATABASE_URL"),
+// ConnectDatabase loads .env, builds the connection string, and opens the DB.
+func ConnectDatabase() {
+	LoadConfig()
+	config := &Config{}
+	if err := viper.Unmarshal(config); err != nil {
+		fmt.Println("Error unmarshalling config:", err)
+		panic(err)
 	}
 
-	db, err := sqlx.Open("postgres", cfg.DatabaseURL)
+	db, err := sqlx.Open("postgres", config.DatabaseURL)
 	if err != nil {
 		fmt.Println("Error connecting to the database:", err)
 		panic(err)
