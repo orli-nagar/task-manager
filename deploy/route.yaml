@@ -1,0 +1,13 @@
+apiVersion: route.openshift.io/v1
+kind: Route 
+
+metadata:
+  name: task-manager
+
+spec:
+  to:
+    kind: Service
+    name: task-manager
+
+  port:
+    targetPort: 8080

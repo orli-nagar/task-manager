@@ -1,26 +1,17 @@
 # Task Management Service
 
-A simple HTTP service written in Go for managing tasks.
-
-Tasks are stored in memory and are not persisted after the server is stopped.
-
-## Running the Service
-
-Run the application locally:
-
-```bash
-go run .
-```
-
-The server runs on port `8080`.
+A REST API built with Go and PostgreSQL for creating, retrieving, updating, and deleting tasks.
 
 ## API Endpoints
 
-### Create a Task
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/tasks` | Create a task |
+| GET | `/tasks` | Retrieve all tasks |
+| PATCH | `/tasks/{id}` | Update a task |
+| DELETE | `/tasks/{id}` | Delete a task |
 
-**POST** `/tasks`
-
-Example request:
+Example POST request:
 
 ```json
 {
@@ -29,53 +20,66 @@ Example request:
 }
 ```
 
-New tasks are created with `completed` set to `false`.
+New tasks are created with `completed: false`. PATCH requests update only the provided fields.
 
-### Get All Tasks
+## Running Locally
 
-**GET** `/tasks`
+The application requires PostgreSQL. Configure the connection in a `.env` file:
 
-Returns all tasks currently stored in memory.
-
-### Update a Task
-
-**PATCH** `/tasks/{id}`
-
-Updates the provided fields of an existing task.
-
-Example request:
-
-```json
-{
-  "title": "Learn Go concurrency",
-  "completed": true
-}
+```env
+DATABASE_URL=postgresql://taskmanager:your_password@localhost:5432/taskmanager?sslmode=disable
 ```
 
-### Delete a Task
-
-**DELETE** `/tasks/{id}`
-
-Deletes the task with the given ID.
-
-## Running with Docker
-
-Build the image:
+Start the application:
 
 ```bash
-podman build -t task-manager .
+go run .
 ```
 
-Run the container:
+Alternatively, run the application and database together using Podman Compose:
 
 ```bash
-podman run -p 8080:8080 task-manager
+podman compose up --build
 ```
 
-The service will be available on port `8080`.
+The API is available at `http://localhost:8080`.
+
+## Deployment to OpenShift
+
+The `deploy/` directory contains the OpenShift manifests for the application and PostgreSQL, including Deployments, Services, and a Route.
+
+The application runs with **two replicas**, both connected to the same PostgreSQL database.
+
+### Deploy
+
+With access to an OpenShift cluster and the `oc` CLI configured, run:
+
+```bash
+./deploy.sh
+```
+
+The script creates the necessary resources, builds the application image, deploys the database and application, and prints the public API URL. On first deployment, it prompts for a database password.
+
+### Verify
+
+Check that PostgreSQL and both application replicas are running:
+
+```bash
+oc get deployments,services,routes
+```
+
+Expected Deployment readiness: `db` at `1/1` and `task-manager` at `2/2`.
+
+Retrieve the API hostname:
+
+```bash
+oc get route task-manager -o jsonpath='{.spec.host}{"\n"}'
+```
+
+Use `http://<route-hostname>/tasks` to test the API with Postman or curl.
+
+The deployment was tested on a temporary OpenShift cluster provisioned through Red Hat Cluster Bot.
 
 ## Storage
 
-Tasks are stored in memory using a Go map. Access to the shared task storage is protected for concurrent requests.
-
-Restarting the service clears all existing tasks.
+Tasks are stored in PostgreSQL and shared across both application replicas. The OpenShift database currently uses ephemeral storage, so data may be lost if its Pod is replaced.
