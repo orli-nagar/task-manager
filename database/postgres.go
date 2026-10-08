@@ -18,12 +18,15 @@ type Config struct {
 func LoadConfig() *Config {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
+	// Register DATABASE_URL so Unmarshal can discover it
+	if err := viper.BindEnv("DATABASE_URL"); err != nil {
+		panic(err)
+	}
 	if err := viper.ReadInConfig(); err != nil {
 		fmt.Println("Warning: could not load .env file:", err)
 	}
 	config := &Config{}
 	if err := viper.Unmarshal(config); err != nil {
-		fmt.Println("Error unmarshalling config:", err)
 		panic(err)
 	}
 	return config
