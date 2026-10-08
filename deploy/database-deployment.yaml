@@ -36,3 +36,13 @@ spec:
 
             - name: POSTGRESQL_DATABASE
               value: taskmanager
+          
+          readinessProbe:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 3
